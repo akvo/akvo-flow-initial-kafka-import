@@ -11,10 +11,12 @@
                  [org.slf4j/jul-to-slf4j "1.7.14"]
                  [org.slf4j/log4j-over-slf4j "1.7.14"]
 
-
                  [org.akvo/commons "0.4.2" :exclusions [[org.clojure/tools.reader]]]
                  [spec-provider "0.4.11"]
                  [cheshire "5.8.0"]
+
+                 [org.akvo/kfk.avro-bridge "1.2.dcc833627f2ff3e17bcfa3cd063903846e635363"]
+                 [org.akvo.flow/flow-avro-schemas "1.0.10.e1101a2b6ac574ff63b4824118cadf843b03064c"]
 
                  [com.taoensso/nippy "2.13.0"]
                  [org.apache.commons/commons-lang3 "3.7"]
