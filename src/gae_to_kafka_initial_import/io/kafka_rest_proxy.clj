@@ -24,19 +24,17 @@
     :max-conns-total max-connections
     :idle-in-pool-timeout 60000))
 
-(defn destroy [client]
-  (http/close client))
-
-(defonce http-client (create-client {:connection-timeout 10000
-                                     :request-timeout    10000
-                                     :max-connections    10}))
-
-(send-request http-client
-                   {:method  :post
-                    :headers {"content-type" "application/vnd.kafka.binary.v2+json"
-                              "Accept"       "application/vnd.kafka.v2+json"}
-                    :url     (str "http://kafka-rest-proxy.akvotest.org/topics/binarytest")
-                    :body    (json/generate-string {:records
-                                                    (map (fn [o]
-                                                           {:value (.encodeToString (Base64/getEncoder) o)})
-                                                         o)})})
+(defn push-as-binary [topic byte-arrays]
+  (with-open [http-client (create-client {:connection-timeout 10000
+                                          :request-timeout    10000
+                                          :max-connections    10})]
+    (doseq [batch (partition 100 byte-arrays)]
+      (send-request http-client
+                    {:method  :post
+                     :headers {"content-type" "application/vnd.kafka.binary.v2+json"
+                               "Accept"       "application/vnd.kafka.v2+json"}
+                     :url     (str "http://kafka-rest-proxy.akvotest.org/topics/" topic)
+                     :body    (json/generate-string {:records
+                                                     (map (fn [o]
+                                                            {:value (.encodeToString (Base64/getEncoder) o)})
+                                                          batch)})}))))
