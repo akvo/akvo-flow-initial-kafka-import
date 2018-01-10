@@ -24,11 +24,11 @@
     :max-conns-total max-connections
     :idle-in-pool-timeout 60000))
 
-(defn push-as-binary [topic byte-arrays]
+(defn push-as-binary [topic byte-arrays-as-base64-strs]
   (with-open [http-client (create-client {:connection-timeout 10000
                                           :request-timeout    10000
                                           :max-connections    10})]
-    (doseq [batch (partition 100 byte-arrays)]
+    (doseq [batch (partition 100 byte-arrays-as-base64-strs)]
       (send-request http-client
                     {:method  :post
                      :headers {"content-type" "application/vnd.kafka.binary.v2+json"
@@ -36,5 +36,5 @@
                      :url     (str "http://kafka-rest-proxy.akvotest.org/topics/" topic)
                      :body    (json/generate-string {:records
                                                      (map (fn [o]
-                                                            {:value (.encodeToString (Base64/getEncoder) o)})
+                                                            {:value o})
                                                           batch)})}))))
