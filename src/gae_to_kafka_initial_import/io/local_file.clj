@@ -1,16 +1,11 @@
 (ns gae-to-kafka-initial-import.io.local-file
-  (:import (java.io ObjectOutputStream FileOutputStream ObjectInputStream FileInputStream)
-           (org.apache.commons.lang3 SerializationUtils)))
+  (:require [clojure.java.io :as io]))
 
-
-(defn write-as-serialized [file objs]
-  (with-open [out (ObjectOutputStream. (FileOutputStream. file))]
+(defn write-to [file objs]
+  (with-open [wrtr (io/writer file)]
     (doseq [o objs]
-      (.writeObject out o))
-    (.writeObject out nil)))
+      (.write wrtr (str o "\n")))))
 
-(defn read-from-serialized [file process-fn]
-  (with-open [in (ObjectInputStream. (FileInputStream. file))]
-    (process-fn
-      (take-while some?
-                  (repeatedly #(.readObject in))))))
+(defn read-from [file process-fn]
+  (with-open [rdr (io/reader file)]
+    (process-fn (line-seq rdr))))
