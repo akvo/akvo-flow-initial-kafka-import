@@ -20,37 +20,11 @@
                                  next-query-result (.asQueryResultList query
                                                                        (query/fetch-options {:limit        batch-size
                                                                                              :start-cursor cursor}))]
-                             (concat next-query-result
-                                     (more-results next-query-result)))))]
+                             (when (seq next-query-result)
+                               (concat next-query-result
+                                       (more-results next-query-result))))))]
       (process-fn (lazy-seq
                     (let [query-result (.asQueryResultList query (query/fetch-options {:limit batch-size}))]
                       (when (seq query-result)
                         (concat query-result
                                 (more-results query-result)))))))))
-
-
-
-(comment
-
-  (fetch-events {:service-account-id "sa-akvoflowsandbox@akvoflowsandbox.iam.gserviceaccount.com"
-                 :org-id             "akvoflowsandbox"
-                 :kind               "SurveyInstance"
-                 :private-key-file   "/Users/dlebrero/projects/akvo/akvo-flow-server-config/akvoflowsandbox/akvoflowsandbox.p12"}
-                (fn [x] (gae-to-kafka-initial-import.io.local-file/write-as-serialized "foo.dat" (take 10 x))))
-
-  (fetch-and-insert-new-events {:service-account-id "sa-akvoflowsandbox@akvoflowsandbox.iam.gserviceaccount.com"
-                                :org-id             "akvoflowsandbox"
-                                :kind               "SurveyInstance"
-                                :private-key-file   "/Users/dlebrero/projects/akvo/akvo-flow-server-config/akvoflowsandbox/akvoflowsandbox.p12"})
-
-  (fetch-and-insert-new-events {:service-account-id "sa-akvoflowsandbox@akvoflowsandbox.iam.gserviceaccount.com"
-                                :org-id             "akvoflowsandbox"
-                                :kind               "QuestionOption"
-                                :private-key-file   "/Users/dlebrero/projects/akvo/akvo-flow-server-config/akvoflowsandbox/akvoflowsandbox.p12"})
-
-  (fetch-and-insert-new-events {:service-account-id "sa-akvoflowsandbox@akvoflowsandbox.iam.gserviceaccount.com"
-                                :org-id             "akvoflowsandbox"
-                                :kind               "SurveyedLocale"
-                                :private-key-file   "/Users/dlebrero/projects/akvo/akvo-flow-server-config/akvoflowsandbox/akvoflowsandbox.p12"})
-
-  )
