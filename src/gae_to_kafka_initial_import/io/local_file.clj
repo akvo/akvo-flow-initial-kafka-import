@@ -3,20 +3,14 @@
            (org.apache.commons.lang3 SerializationUtils)))
 
 
-(defn write-to-file [file batch]
+(defn write-as-serialized [file objs]
   (with-open [out (ObjectOutputStream. (FileOutputStream. file))]
-    (batch (fn [events]
-             (doseq [o events]
-               (.writeObject out o))
-             ::more))
+    (doseq [o objs]
+      (.writeObject out o))
     (.writeObject out nil)))
 
-(defn read-from-file [file batch]
+(defn read-from-serialized [file process-fn]
   (with-open [in (ObjectInputStream. (FileInputStream. file))]
-    (batch
+    (process-fn
       (take-while some?
                   (repeatedly #(.readObject in))))))
-
-
-(read-from-file "binary.dat"
-                (fn [events] (println (take 10 (partition 10 events)))))
