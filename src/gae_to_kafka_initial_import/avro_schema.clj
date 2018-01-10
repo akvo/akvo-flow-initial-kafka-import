@@ -1,4 +1,4 @@
-(ns gae-to-kafka-initial-import.avro
+(ns gae-to-kafka-initial-import.avro-schema
   (:require
     [clojure.java.io :refer (reader)]
     clojure.walk
