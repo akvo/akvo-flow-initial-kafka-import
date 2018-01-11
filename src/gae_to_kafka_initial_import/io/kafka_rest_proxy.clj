@@ -3,7 +3,11 @@
             [http.async.client :as http]
             [http.async.client.request :as http-req])
   (:import (com.ning.http.client Request)
-           (java.util Base64)))
+           (java.nio.charset Charset)
+           (org.apache.avro.generic GenericDatumWriter)
+           (org.apache.avro.io EncoderFactory)
+           (java.io ByteArrayOutputStream)
+           (org.apache.avro Schema)))
 
 (defn send-request [client {:keys [method url] :as req}]
   (let [request ^Request (apply http-req/prepare-request method url (apply concat (dissoc req :method :url)))
@@ -13,6 +17,11 @@
       :body (http/string response)
       :error (http/error response)
       :headers (http/headers response))))
+
+(defn ok? [response]
+  (when (or (:error response)
+            (-> response :status :code (not= 200)))
+    (throw (ex-info "error returned by proxy" response))))
 
 (defn create-client [{:keys [connection-timeout request-timeout max-connections]}]
   {:pre [connection-timeout request-timeout max-connections]}
@@ -28,13 +37,36 @@
   (with-open [http-client (create-client {:connection-timeout 10000
                                           :request-timeout    10000
                                           :max-connections    10})]
-    (doseq [batch (partition 100 byte-arrays-as-base64-strs)]
-      (send-request http-client
-                    {:method  :post
-                     :headers {"content-type" "application/vnd.kafka.binary.v2+json"
-                               "Accept"       "application/vnd.kafka.v2+json"}
-                     :url     (str "http://kafka-rest-proxy.akvotest.org/topics/" topic)
-                     :body    (json/generate-string {:records
-                                                     (map (fn [o]
-                                                            {:value o})
-                                                          batch)})}))))
+    (doseq [batch (partition-all 100 byte-arrays-as-base64-strs)]
+      (ok? (send-request http-client
+                         {:method  :post
+                          :headers {"content-type" "application/vnd.kafka.binary.v2+json"
+                                    "Accept"       "application/vnd.kafka.v2+json"}
+                          :url     (str "http://kafka-rest-proxy.akvotest.org/topics/" topic)
+                          :body    (json/generate-string {:records
+                                                          (map (fn [o]
+                                                                 {:value o})
+                                                               batch)})})))))
+
+(defn ->avro-json [schema o]
+  (let [bo (ByteArrayOutputStream.)
+        json-enconder (.jsonEncoder (EncoderFactory/get) schema bo)]
+    (.write (GenericDatumWriter. schema) o json-enconder)
+    (.flush json-enconder)
+    (.close bo)
+    (String. (.toByteArray bo) (Charset/forName "UTF-8"))))
+
+(defn push-as-avro [topic ^Schema schema generic-data-records]
+  (with-open [http-client (create-client {:connection-timeout 10000
+                                          :request-timeout    10000
+                                          :max-connections    10})]
+    (doseq [batch (partition-all 100 generic-data-records)]
+      (ok? (send-request http-client
+                         {:method  :post
+                          :headers {"content-type" "application/vnd.kafka.avro.v2+json"
+                                    "Accept"       "application/vnd.kafka.v2+json"}
+                          :url     (str "http://kafka-rest-proxy.akvotest.org/topics/" topic)
+                          :body    (json/generate-string {:value_schema (str schema)
+                                                          :records      (map (fn [o]
+                                                                               {:value (json/parse-string (->avro-json schema o))})
+                                                                             batch)})})))))
