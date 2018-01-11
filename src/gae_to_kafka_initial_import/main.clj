@@ -3,7 +3,7 @@
             [gae-to-kafka-initial-import.io.local-file :as local-file]
             [gae-to-kafka-initial-import.io.kafka-rest-proxy :as kafka]
             [gae-to-kafka-initial-import.gae-entity :as gae-entity]
-            [thdr.kfk.avro-bridge.core :as avro]
+            [gae-to-kafka-initial-import.avro-schema :as avro-schema]
             [camel-snake-kebab.core :refer [->camelCase]]
             [clojure.tools.logging :as log])
   (:import (org.apache.commons.lang3 SerializationUtils)
@@ -48,41 +48,58 @@
 (defn valid-avro? [schema o]
   (.validate (GenericData/get) schema o))
 
-(defn gae->local-file []
-  (gae/fetch-events {:service-account-id "sa-akvoflowsandbox@akvoflowsandbox.iam.gserviceaccount.com"
-                     :org-id             "akvoflowsandbox"
-                     :kind               "SurveyedLocale"
-                     :private-key-file   "/Users/dlebrero/projects/akvo/akvo-flow-server-config/akvoflowsandbox/akvoflowsandbox.p12"}
-                    (comp (partial local-file/write-to "gae.strs")
+(defn gae->local-file [gae-config file]
+  (gae/fetch-events gae-config
+                    (comp (partial local-file/write-to file)
                           (partial map bytes->str)
                           (partial map obj->bytes)
                           log-progress)))
 
-(defn local-file->kafka-tmp []
-  (local-file/read-from "gae.strs"
+(defn local-file->kafka-binary [binary-file topic]
+  (local-file/read-from binary-file
                         (comp
-                          (partial kafka/push-as-binary "binarytest")
+                          (partial kafka/push-as-binary topic)
                           log-progress)))
 
 
-(defn local-file->kafka-avro []
-  (let [schema (org.akvo.flow.avro.DataPoint/getClassSchema)]
-    (local-file/read-from "gae.strs"
-                          (comp
-                            (partial kafka/push-as-avro "nonbinarytest" schema)
-                            (partial filter (partial valid-avro? schema))
-                            (partial map (comp
-                                           (fn [m]
-                                             (avro/->java schema
-                                                          (dissoc m ::gae-entity/key)
-                                                          {:java-field-fn          (comp name ->camelCase)
-                                                           :ignore-unknown-fields? true}))
-                                           time->long
-                                           gae-entity->clj
-                                           bytes->obj
-                                           str->bytes))))))
+(defn local-file->kafka-avro [binary-file topic schema]
+  (local-file/read-from binary-file
+                        (comp
+                          (partial kafka/push-as-avro topic schema)
+                          (partial filter (partial valid-avro? schema))
+                          (partial map (comp
+                                         (fn [m]
+                                           (avro/->java schema
+                                                        (dissoc m ::gae-entity/key)
+                                                        {:java-field-fn          (comp name ->camelCase)
+                                                         :ignore-unknown-fields? true}))
+                                         time->long
+                                         gae-entity->clj
+                                         bytes->obj
+                                         str->bytes))
+                          log-progress)))
 
 (comment
+
+  (gae->local-file {:service-account-id "sa-akvoflowsandbox@akvoflowsandbox.iam.gserviceaccount.com"
+                    :org-id             "akvoflowsandbox"
+                    :kind               "SurveyedLocale"
+                    :private-key-file   "/Users/dlebrero/projects/akvo/akvo-flow-server-config/akvoflowsandbox/akvoflowsandbox.p12"}
+                   "gae.strs")
+
+  (local-file->kafka-binary "gae.strs" "binarytest")
+
+  (local-file->kafka-avro "gae.strs" "nonbinarytest" (org.akvo.flow.avro.DataPoint/getClassSchema))
+
+  (local-file/read-from "gae.strs"
+                        (comp
+                          (fn [stats] (gae-to-kafka-initial-import.avro-schema/->avro stats "Foo"))
+                          gae-to-kafka-initial-import.avro-schema/collect-stats
+                          (partial map (comp
+                                         gae-entity->clj
+                                         bytes->obj
+                                         str->bytes))))
+
 
   (fetch-and-insert-new-events {:service-account-id "sa-akvoflowsandbox@akvoflowsandbox.iam.gserviceaccount.com"
                                 :org-id             "akvoflowsandbox"
