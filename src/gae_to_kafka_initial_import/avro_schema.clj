@@ -6,8 +6,10 @@
     [spec-provider.stats :as st]
     [cheshire.core :as cheshire]))
 
-(defn can-be-null? [stats]
-  (get-in stats [::st/pred-map nil?]))
+(defn can-be-null? [stats parent-sample-count]
+  (or
+    (get-in stats [::st/pred-map nil?])
+    (< (::st/sample-count stats) parent-sample-count)))
 
 (defn date? [o]
   (instance? java.util.Date o))
@@ -18,10 +20,10 @@
         (conj p date?)
         (conj p (complement (apply some-fn p)))))
 
-(defn maybe-upgrade-to-enum [stats last-seen-name type]
+(defn maybe-upgrade-to-enum [stats last-seen-name type parent-sample-count]
   (if (and (seq (::st/distinct-values stats))
            (not (::st/hit-distinct-values-limit stats))
-           (not (can-be-null? stats)))
+           (not (can-be-null? stats parent-sample-count)))
     {:type {:type    "enum"
             :name    last-seen-name
             :symbols (::st/distinct-values stats)}}
@@ -35,30 +37,33 @@
       (str (.toUpperCase (subs s 0 1))
            (subs s 1)))))
 
-(defn ->avro [stats last-seen-name]
-  (let [without-nil? (dissoc (::st/pred-map stats) nil?)]
-    (if (< 1 (count without-nil?))
-      (throw (ex-info "dont know how to handle" {:i stats}))
-      (let [guessed-type (condp = (first (keys without-nil?))
-                           map? {:type   "record"
-                                 :name   last-seen-name
-                                 :fields (sort-by :name
-                                                  (map (fn [[k v]]
-                                                         (merge {:name k}
-                                                                (->avro v (uppercase-first (name k)))))
-                                                       (::st/keys (::st/map stats))))}
-                           sequential? {:type {:type  "array"
-                                               :items (->avro (::st/elements-coll stats) last-seen-name)}}
-                           string? (maybe-upgrade-to-enum stats last-seen-name {:type "string"})
-                           integer? {:type "long"}
-                           double? {:type "double"}
-                           boolean? {:type "boolean"}
-                           date? {:type "long"}
-                           nil nil
-                           {:type "unknown" :value stats})]
-        (if (can-be-null? stats)
-          (update guessed-type :type (fn [t] (if t ["null" t] "null")))
-          guessed-type)))))
+(defn ->avro
+  ([stats root-name]
+    (->avro stats root-name (::st/sample-count stats)))
+  ([stats last-seen-name parent-sample-count]
+   (let [without-nil? (dissoc (::st/pred-map stats) nil?)]
+     (if (< 1 (count without-nil?))
+       (throw (ex-info "dont know how to handle" {:i stats}))
+       (let [guessed-type (condp = (first (keys without-nil?))
+                            map? {:type   "record"
+                                  :name   last-seen-name
+                                  :fields (sort-by :name
+                                                   (map (fn [[k v]]
+                                                          (merge {:name k}
+                                                                 (->avro v (uppercase-first (name k)) (::st/sample-count stats))))
+                                                        (::st/keys (::st/map stats))))}
+                            sequential? {:type {:type  "array"
+                                                :items (->avro (::st/elements-coll stats) last-seen-name)}}
+                            string? (maybe-upgrade-to-enum stats last-seen-name {:type "string"} (::st/sample-count stats))
+                            integer? {:type "long"}
+                            double? {:type "double"}
+                            boolean? {:type "boolean"}
+                            date? {:type "long"}
+                            nil nil
+                            {:type "unknown" :value stats})]
+         (if (can-be-null? stats parent-sample-count)
+           (update guessed-type :type (fn [t] (if t ["null" t] "null")))
+           guessed-type))))))
 
 (defn collect-stats [coll]
   (binding [spec-provider.stats/preds (predicates-including-date)]
