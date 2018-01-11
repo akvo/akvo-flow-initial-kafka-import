@@ -20,13 +20,16 @@
         (conj p date?)
         (conj p (complement (apply some-fn p)))))
 
+(defn examples [stats]
+  (seq (filter some? (::st/distinct-values stats))))
+
 (defn maybe-upgrade-to-enum [stats last-seen-name type parent-sample-count]
-  (if (and (seq (::st/distinct-values stats))
+  (if (and (examples stats)
            (not (::st/hit-distinct-values-limit stats))
            (not (can-be-null? stats parent-sample-count)))
     {:type {:type    "enum"
             :name    last-seen-name
-            :symbols (::st/distinct-values stats)}}
+            :symbols (examples stats)}}
     type))
 
 (defn ^String uppercase-first
@@ -37,9 +40,21 @@
       (str (.toUpperCase (subs s 0 1))
            (subs s 1)))))
 
+(defn example-doc [examples]
+  (str "Examples: "
+       (->> examples
+            (filter some?)
+            (map (fn [v] (if (= v "") "empty string" v)))
+            (map (fn [v] (if (date? v)
+                           (str v " (" (.getTime v) ")")
+                           v)))
+            (map (fn [v] (str "<" v ">")))
+            (take 3)
+            (clojure.string/join ", "))))
+
 (defn ->avro
   ([stats root-name]
-    (->avro stats root-name (::st/sample-count stats)))
+   (->avro stats root-name (::st/sample-count stats)))
   ([stats last-seen-name parent-sample-count]
    (let [without-nil? (dissoc (::st/pred-map stats) nil?)]
      (if (< 1 (count without-nil?))
@@ -61,9 +76,13 @@
                             date? {:type "long"}
                             nil nil
                             {:type "unknown" :value stats})]
-         (if (can-be-null? stats parent-sample-count)
-           (update guessed-type :type (fn [t] (if t ["null" t] "null")))
-           guessed-type))))))
+         (cond-> guessed-type
+
+                 (can-be-null? stats parent-sample-count)
+                 (update :type (fn [t] (if t ["null" t] "null")))
+
+                 (examples stats)
+                 (assoc :doc (example-doc (examples stats)))))))))
 
 (defn collect-stats [coll]
   (binding [spec-provider.stats/preds (predicates-including-date)]
