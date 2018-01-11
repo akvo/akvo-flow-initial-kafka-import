@@ -11,13 +11,10 @@
     (get-in stats [::st/pred-map nil?])
     (< (::st/sample-count stats) parent-sample-count)))
 
-(defn date? [o]
-  (instance? java.util.Date o))
-
 (defn predicates-including-date []
   (as-> spec-provider.stats/preds p
         (butlast p)
-        (conj p date?)
+        (conj p inst?)
         (conj p (complement (apply some-fn p)))))
 
 (defn examples [stats]
@@ -45,8 +42,8 @@
        (->> examples
             (filter some?)
             (map (fn [v] (if (= v "") "empty string" v)))
-            (map (fn [v] (if (date? v)
-                           (str v " (" (.getTime v) ")")
+            (map (fn [v] (if (inst? v)
+                           (str v " (" (inst-ms v) ")")
                            v)))
             (map (fn [v] (str "<" v ">")))
             (take 3)
@@ -73,7 +70,7 @@
                             integer? {:type "long"}
                             double? {:type "double"}
                             boolean? {:type "boolean"}
-                            date? {:type "long"}
+                            inst? {:type "long"}
                             nil nil
                             {:type "unknown" :value stats})]
          (cond-> guessed-type
