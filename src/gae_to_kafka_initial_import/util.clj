@@ -10,13 +10,11 @@
            (java.util Base64)
            (org.slf4j.bridge SLF4JBridgeHandler)
            (java.util.logging LogManager)
-           (java.io ByteArrayOutputStream OutputStream)
+           (java.io ByteArrayOutputStream)
            (java.nio.charset Charset)
            (org.apache.avro.io EncoderFactory)
            (com.google.appengine.api.datastore Entity)
            (org.apache.avro Schema)))
-
-(set! *warn-on-reflection* true)
 
 (.reset (LogManager/getLogManager))
 (SLF4JBridgeHandler/removeHandlersForRootLogger)
