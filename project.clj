@@ -14,8 +14,9 @@
                  [org.akvo/commons "0.4.2" :exclusions [[org.clojure/tools.reader]]]
                  [spec-provider "0.4.11"]
                  [cheshire "5.8.0"]
+                 [medley "1.0.0"]
 
-                 [org.akvo/kfk.avro-bridge "1.4.4d8c1b74e8d85e9ea03292c7952ce093b1b88e71"]
+                 [org.akvo/kfk.avro-bridge "1.5.0b144984c335ea011dad0a891409710f2d0b75a0"]
                  [org.akvo.flow/flow-avro-schemas "1.0.10.e1101a2b6ac574ff63b4824118cadf843b03064c"]
 
                  [com.taoensso/nippy "2.13.0"]
