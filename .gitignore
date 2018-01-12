@@ -12,3 +12,4 @@ pom.xml.asc
 .idea/
 binary.dat
 gae-to-kafka-initial-import.iml
+*.binary.txt
