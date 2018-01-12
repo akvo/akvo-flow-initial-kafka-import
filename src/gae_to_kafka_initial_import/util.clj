@@ -1,6 +1,7 @@
 (ns gae-to-kafka-initial-import.util
   (:require [gae-to-kafka-initial-import.gae-entity :as gae-entity]
             [clojure.tools.logging :as log]
+            [camel-snake-kebab.core :refer [->camelCase]]
             [thdr.kfk.avro-bridge.core :as avro])
   (:import (org.apache.commons.lang3 SerializationUtils)
            (org.apache.avro.generic GenericData)
