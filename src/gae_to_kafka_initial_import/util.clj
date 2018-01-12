@@ -1,6 +1,7 @@
 (ns gae-to-kafka-initial-import.util
   (:require [gae-to-kafka-initial-import.gae-entity :as gae-entity]
-            [clojure.tools.logging :as log])
+            [clojure.tools.logging :as log]
+            [thdr.kfk.avro-bridge.core :as avro])
   (:import (org.apache.commons.lang3 SerializationUtils)
            (org.apache.avro.generic GenericData)
            (java.util Base64)
@@ -48,3 +49,9 @@
 
 (defn valid-avro? [schema o]
   (.validate (GenericData/get) schema o))
+
+(defn clj->avro-generic-record [schema m]
+  (avro/->java schema
+               (dissoc m ::gae-entity/key)
+               {:java-field-fn          (comp name ->camelCase)
+                :ignore-unknown-fields? true}))
