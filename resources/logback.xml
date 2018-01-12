@@ -3,6 +3,7 @@
 
    <logger name="akvo" level="INFO"/>
    <logger name="org.apache.kafka.clients.producer.ProducerConfig" level="WARN"/>
+   <logger name="com.google.apphosting.utils.config.AppEngineWebXmlReader" level="ERROR"/>
 
    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
       <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
