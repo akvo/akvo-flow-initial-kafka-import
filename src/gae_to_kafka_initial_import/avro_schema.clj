@@ -49,9 +49,9 @@
             (take 3)
             (clojure.string/join ", "))))
 
-(defn ->avro
+(defn schema
   ([stats root-name]
-   (->avro stats root-name (::st/sample-count stats)))
+   (schema stats root-name (::st/sample-count stats)))
   ([stats last-seen-name parent-sample-count]
    (let [without-nil?-predicate (dissoc (::st/pred-map stats) nil?)]
      (if (< 1 (count without-nil?-predicate))
@@ -64,11 +64,11 @@
                            :fields (sort-by :name
                                             (map (fn [[k v]]
                                                    (merge {:name k}
-                                                          (->avro v (uppercase-first (name k)) (::st/sample-count stats))))
+                                                          (schema v (uppercase-first (name k)) (::st/sample-count stats))))
                                                  (::st/keys (::st/map stats))))}]
 
                sequential? [sequential? {:type {:type  "array"
-                                                :items (->avro (::st/elements-coll stats) last-seen-name)}}]
+                                                :items (schema (::st/elements-coll stats) last-seen-name)}}]
 
                string? [string? (maybe-upgrade-to-enum stats last-seen-name {:type "string"} (::st/sample-count stats))]
 
@@ -97,54 +97,6 @@
       coll
       {::st/distinct-limit 20})))
 
-(defn stats-for-file [file]
-  (with-open [rdr (reader file)]
-    (collect-stats
-      (for [line (line-seq rdr)]
-        (clojure.walk/keywordize-keys (read-string line))))))
-
-(defn generate-avro [file type-name namespace]
-  (let [stats (stats-for-file file)]
-    (assoc (->avro stats type-name) :namespace namespace)))
-
-
-
-
-(comment
-
-  (generate-avro "akvoflowsandbox.SurveyedLocale.edn" "DataPoint" "org.akvo.flow")
-  (spit "DataPoint.avsc" (cheshire/generate-string *1))
-
-  (with-open [rdr (reader "akvoflowsandbox.SurveyedLocale.edn")]
-    (sp/pprint-specs
-      (sp/infer-specs
-        (for [line (line-seq rdr)]
-          (clojure.walk/keywordize-keys (read-string line)))
-        :data/point
-        {:spec-provider.stats/distinct-limit 100})
-      *ns* 's))
-
-
-  (def survey-group
-    (into {}
-          (map
-            (juxt :akvo-unified-log.dan/key identity)
-            (with-open [rdr (reader "akvoflowsandbox.SurveyGroup.edn")]
-              (doall (for [line (line-seq rdr)]
-                       (clojure.walk/keywordize-keys (read-string line))))))))
-
-  (get survey-group 389005)
-
-  (println (cheshire/generate-string (->avro (collect-stats (vals survey)) "Survey")))
-  (->avro (collect-stats (vals survey)) "Survey")
-
-  (def survey
-    (reduce
-      (fn [i v]
-        (if (get i (:surveyGroupId v))
-          (update-in i [(:surveyGroupId v) :form] conj v)
-          i))
-      survey-group
-      (with-open [rdr (reader "akvoflowsandbox.Survey.edn")]
-        (doall (for [line (line-seq rdr)]
-                 (clojure.walk/keywordize-keys (read-string line))))))))
+(defn avro-schema [namespace type-name coll]
+  (let [stats (collect-stats coll)]
+    (assoc (schema stats type-name) :namespace namespace)))

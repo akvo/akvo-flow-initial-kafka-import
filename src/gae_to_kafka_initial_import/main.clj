@@ -3,7 +3,8 @@
             [gae-to-kafka-initial-import.core :as initial-import]
             [medley.core :as medley]
             [camel-snake-kebab.core :refer [->camelCase ->kebab-case]]
-            [clojure.tools.logging :as log])
+            [clojure.tools.logging :as log]
+            [gae-to-kafka-initial-import.util :as util])
   (:import (com.google.apphosting.utils.config AppEngineWebXmlReader)))
 
 (defn instance-info
@@ -71,12 +72,9 @@
   (download-from-gae kind instances)
   (validate-against-schema schema kind instances)
   (push-to-kafka schema kind instances)
-  (local-file/read-from "gae-internal2.strs"
-                        (comp
-                          (fn [stats] (gae-to-kafka-initial-import.avro-schema/->avro stats "Foo"))
-                          gae-to-kafka-initial-import.avro-schema/collect-stats
-                          (partial map (comp
-                                         gae-entity->clj
-                                         bytes->obj
-                                         str->bytes))))
-  )
+
+  (let [transform (util/transform-to :clj nil)]
+    (local-file/read-from "akvoflow-internal2.SurveyedLocale.binary.txt"
+                          (comp
+                            (partial gae-to-kafka-initial-import.avro-schema/avro-schema "org.akvo" "DataPoint")
+                            (partial map transform)))))
