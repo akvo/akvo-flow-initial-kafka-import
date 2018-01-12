@@ -53,33 +53,43 @@
   ([stats root-name]
    (->avro stats root-name (::st/sample-count stats)))
   ([stats last-seen-name parent-sample-count]
-   (let [without-nil? (dissoc (::st/pred-map stats) nil?)]
-     (if (< 1 (count without-nil?))
+   (let [without-nil?-predicate (dissoc (::st/pred-map stats) nil?)]
+     (if (< 1 (count without-nil?-predicate))
        (throw (ex-info "dont know how to handle" {:i stats}))
-       (let [guessed-type (condp = (first (keys without-nil?))
-                            map? {:type   "record"
-                                  :name   last-seen-name
-                                  :fields (sort-by :name
-                                                   (map (fn [[k v]]
-                                                          (merge {:name k}
-                                                                 (->avro v (uppercase-first (name k)) (::st/sample-count stats))))
-                                                        (::st/keys (::st/map stats))))}
-                            sequential? {:type {:type  "array"
-                                                :items (->avro (::st/elements-coll stats) last-seen-name)}}
-                            string? (maybe-upgrade-to-enum stats last-seen-name {:type "string"} (::st/sample-count stats))
-                            integer? {:type "long"}
-                            double? {:type "double"}
-                            boolean? {:type "boolean"}
-                            inst? {:type "long"}
-                            nil nil
-                            {:type "unknown" :value stats})]
-         (cond-> guessed-type
+       (let [[guessed-type avro-representation]
+             (condp = (first (keys without-nil?-predicate))
+
+               map? [map? {:type   "record"
+                           :name   last-seen-name
+                           :fields (sort-by :name
+                                            (map (fn [[k v]]
+                                                   (merge {:name k}
+                                                          (->avro v (uppercase-first (name k)) (::st/sample-count stats))))
+                                                 (::st/keys (::st/map stats))))}]
+
+               sequential? [sequential? {:type {:type  "array"
+                                                :items (->avro (::st/elements-coll stats) last-seen-name)}}]
+
+               string? [string? (maybe-upgrade-to-enum stats last-seen-name {:type "string"} (::st/sample-count stats))]
+
+               integer? [integer? {:type "long"}]
+               double? [double? {:type "double"}]
+               boolean? [boolean? {:type "boolean"}]
+               inst? [inst? {:type "long"}]
+               nil [nil nil]
+               [:unknown {:type "unknown" :value stats}])
+             guessed-type-stats (get without-nil?-predicate guessed-type)]
+
+         (cond-> avro-representation
 
                  (can-be-null? stats parent-sample-count)
                  (update :type (fn [t] (if t ["null" t] "null")))
 
                  (examples stats)
-                 (assoc :doc (example-doc (examples stats)))))))))
+                 (assoc :doc (example-doc (examples stats)))
+
+                 (::st/min guessed-type-stats)
+                 (update :doc str ". Range [" (::st/min guessed-type-stats) "," (::st/max guessed-type-stats) "]")))))))
 
 (defn collect-stats [coll]
   (binding [spec-provider.stats/preds (predicates-including-date)]
