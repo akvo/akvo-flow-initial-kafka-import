@@ -1,11 +1,8 @@
 (ns gae-to-kafka-initial-import.core
   (:require [gae-to-kafka-initial-import.io.local-file :as local-file]
             [gae-to-kafka-initial-import.util :as util]
-            [thdr.kfk.avro-bridge.core :as avro]
             [gae-to-kafka-initial-import.io.kafka-rest-proxy :as kafka]
-            [camel-snake-kebab.core :refer [->camelCase ->kebab-case]]
-            [gae-to-kafka-initial-import.io.gae :as gae]
-            [gae-to-kafka-initial-import.gae-entity :as gae-entity]))
+            [gae-to-kafka-initial-import.io.gae :as gae]))
 
 (defn gae->local-file [gae-config file]
   (gae/fetch-events gae-config
@@ -20,33 +17,27 @@
                           (partial kafka/push-as-binary topic)
                           util/log-progress)))
 
-(def str->clj (comp util/time->long
-                    util/gae-entity->clj
-                    util/bytes->obj
-                    util/str->bytes))
-
 (defn local-file->kafka-avro [binary-file topic schema]
   (local-file/read-from binary-file
                         (comp
                           (partial kafka/push-as-avro topic schema)
-                          (partial map (comp
-                                         (partial util/clj->avro-generic-record schema)
-                                         str->clj))
                           util/log-progress)))
 
 (defn check-local-file-against-schema [binary-file schema]
-  (local-file/read-from binary-file
-                        (comp
-                          ;(juxt count )
-                          first
-                          (partial remove nil?)
-                          (partial map (comp
-                                         (fn [m]
-                                           (try
-                                             (if (util/valid-avro? schema
-                                                                   (util/clj->avro-generic-record schema m))
-                                               nil
-                                               m)
-                                             (catch Exception _ m)))
-                                         str->clj))
-                          util/log-progress)))
+  (let [transform (util/transform-to :json-str schema)]
+    (frequencies
+      (local-file/read-from binary-file
+                            (comp
+                              doall
+                              (partial map (comp
+                                             (fn [m]
+                                               (try
+                                                 (if (transform m)
+                                                   [::ok nil]
+                                                   (throw (RuntimeException. (str "This should not happen " m))))
+                                                 (catch Exception e [::error (.getMessage e)])))))
+                              util/log-progress)))))
+
+(comment
+  (def y (check-local-file-against-schema "akvoflowsandbox.SurveyedLocale.binary.txt" (org.akvo.flow.avro.DataPoint/getClassSchema)))
+  (def x (check-local-file-against-schema "akvoflow-internal2.SurveyedLocale.binary.txt" (org.akvo.flow.avro.DataPoint/getClassSchema))))
