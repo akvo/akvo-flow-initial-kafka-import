@@ -2,7 +2,8 @@
   (:require [clojure.java.io :as io]
             [gae-to-kafka-initial-import.core :as initial-import]
             [medley.core :as medley]
-            [camel-snake-kebab.core :refer [->camelCase ->kebab-case]])
+            [camel-snake-kebab.core :refer [->camelCase ->kebab-case]]
+            [clojure.tools.logging :as log])
   (:import (com.google.apphosting.utils.config AppEngineWebXmlReader)))
 
 (defn instance-info
@@ -45,9 +46,13 @@
 
 (defn validate-against-schema [schema kind instances]
   (doseq [instance instances]
-    (initial-import/check-local-file-against-schema
-      (local-file-for (:org-id instance) kind)
-      schema)))
+    (let [report (initial-import/report-schema-compliance
+                   (local-file-for (:org-id instance) kind)
+                   schema)]
+      (log/info "Schema report for" (:org-id instance) "kind" kind)
+      (initial-import/log-report report)
+      (when (initial-import/errors report)
+        (throw (RuntimeException. (str "Schema errors. See logs")))))))
 
 (defn push-to-kafka [schema kind instances]
   (doseq [instance instances]
@@ -59,7 +64,7 @@
 (comment
 
   (def kind "SurveyedLocale")
-  ;(def instances (find-all-enabled-tentants "/Users/dlebrero/projects/akvo/akvo-flow-server-config/"))
+  (def instances (find-all-enabled-tentants "/Users/dlebrero/projects/akvo/akvo-flow-server-config/"))
   (def instances (find-all-enabled-tentants "/Users/dlebrero/projects/akvo/akvo-flow-server-config/akvoflowsandbox"))
   (def schema (org.akvo.flow.avro.DataPoint/getClassSchema))
 
