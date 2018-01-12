@@ -24,13 +24,15 @@
 
 (defn log-progress
   ([s]
-   (log-progress s 300))
+   (log-progress s 1000))
   ([s n]
    (log-progress s n 0))
   ([s n so-far]
    (lazy-seq
      (when (zero? (mod so-far n))
        (log/info "progress: " so-far))
+     (when (zero? (mod so-far (/ n 10)))
+       (log/debug "progress: " so-far))
      (when (seq s)
        (cons (first s)
              (log-progress (rest s) n (inc so-far)))))))
