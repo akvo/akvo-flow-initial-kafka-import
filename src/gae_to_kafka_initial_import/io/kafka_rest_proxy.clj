@@ -1,12 +1,9 @@
 (ns gae-to-kafka-initial-import.io.kafka-rest-proxy
   (:require [cheshire.core :as json]
             [http.async.client :as http]
-            [http.async.client.request :as http-req])
+            [http.async.client.request :as http-req]
+            [gae-to-kafka-initial-import.util :as util])
   (:import (com.ning.http.client Request)
-           (java.nio.charset Charset)
-           (org.apache.avro.generic GenericDatumWriter)
-           (org.apache.avro.io EncoderFactory)
-           (java.io ByteArrayOutputStream)
            (org.apache.avro Schema)))
 
 (defn send-request [client {:keys [method url] :as req}]
@@ -48,25 +45,18 @@
                                                                  {:value o})
                                                                batch)})})))))
 
-(defn ->avro-json [schema o]
-  (let [bo (ByteArrayOutputStream.)
-        json-enconder (.jsonEncoder (EncoderFactory/get) schema bo)]
-    (.write (GenericDatumWriter. schema) o json-enconder)
-    (.flush json-enconder)
-    (.close bo)
-    (String. (.toByteArray bo) (Charset/forName "UTF-8"))))
-
 (defn push-as-avro [topic ^Schema schema generic-data-records]
   (with-open [http-client (create-client {:connection-timeout 10000
                                           :request-timeout    10000
                                           :max-connections    10})]
-    (doseq [batch (partition-all 100 generic-data-records)]
-      (ok? (send-request http-client
-                         {:method  :post
-                          :headers {"content-type" "application/vnd.kafka.avro.v2+json"
-                                    "Accept"       "application/vnd.kafka.v2+json"}
-                          :url     (str "http://kafka-rest-proxy.akvotest.org/topics/" topic)
-                          :body    (json/generate-string {:value_schema (str schema)
-                                                          :records      (map (fn [o]
-                                                                               {:value (json/parse-string (->avro-json schema o))})
-                                                                             batch)})})))))
+    (let [transform (util/transform-to :avro-json schema)]
+      (doseq [batch (partition-all 100 generic-data-records)]
+        (ok? (send-request http-client
+                           {:method  :post
+                            :headers {"content-type" "application/vnd.kafka.avro.v2+json"
+                                      "Accept"       "application/vnd.kafka.v2+json"}
+                            :url     (str "http://kafka-rest-proxy.akvotest.org/topics/" topic)
+                            :body    (json/generate-string {:value_schema (str schema)
+                                                            :records      (map (fn [o]
+                                                                                 {:value (transform o)})
+                                                                               batch)})}))))))
