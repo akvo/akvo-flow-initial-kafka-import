@@ -57,6 +57,9 @@
         v))
     m))
 
+(defn remove-gae-key [m]
+  (dissoc m ::gae-entity/key))
+
 (defn clj->avro-generic-record [schema m]
   (avro/->java schema
                (dissoc m ::gae-entity/key)
@@ -75,6 +78,7 @@
   (let [all-steps [[:bytes #(and (string? %) (not (= \{ (first %)))) str->bytes]
                    [:gae-entity bytes? bytes->obj]
                    [:clj (partial instance? Entity) gae-entity->clj]
+                   [:clj-no-gae-key map? remove-gae-key]
                    [:clj-date-as-long map? time->long]
                    [:generic-record map? (partial clj->avro-generic-record schema)]
                    [:json-str (partial instance? GenericData$Record) (partial ->avro-json-str schema)]
