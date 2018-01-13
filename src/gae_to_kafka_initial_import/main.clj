@@ -73,7 +73,7 @@
   (validate-against-schema schema kind instances)
   (push-to-kafka schema kind instances)
 
-  (let [transform (util/transform-to :clj nil)]
+  (let [transform (util/transform-to :clj-no-gae-key nil)]
     (local-file/read-from "akvoflow-internal2.SurveyedLocale.binary.txt"
                           (comp
                             (partial gae-to-kafka-initial-import.avro-schema/avro-schema "org.akvo" "DataPoint")
