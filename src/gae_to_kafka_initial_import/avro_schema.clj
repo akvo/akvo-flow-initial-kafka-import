@@ -38,16 +38,19 @@
            (subs s 1)))))
 
 (defn example-doc [examples]
-  (str "Examples: "
-       (->> examples
-            (filter some?)
-            (map (fn [v] (if (= v "") "empty string" v)))
-            (map (fn [v] (if (inst? v)
-                           (str v " (" (inst-ms v) ")")
-                           v)))
-            (map (fn [v] (str "<" v ">")))
-            (take 3)
-            (clojure.string/join ", "))))
+  (let [examples-without-nil (->> examples
+                                  (filter some?)
+                                  (map (fn [v] (if (= v "") "empty string" v)))
+                                  (map (fn [v] (if (inst? v)
+                                                 (str v " (" (inst-ms v) ")")
+                                                 v)))
+                                  (map (fn [v] (str "<" v ">"))))]
+    (if (= 1 (count examples-without-nil))
+      (str "It is always '" (first examples-without-nil) "'")
+      (str "Examples: "
+           (->> examples-without-nil
+                (take 3)
+                (clojure.string/join ", "))))))
 
 (declare schema)
 
@@ -77,8 +80,20 @@
           {:type "unknown" :value stats})]
 
     (cond-> avro-representation
+
             (::st/min v)
-            (assoc :doc (str "Range [" (::st/min v) "," (::st/max v) "]")))))
+            (update :doc str "Range [" (::st/min v) "," (::st/max v) "]. ")
+
+            (::st/min-length v)
+            (update :doc str "Size [" (::st/min-length v) "," (::st/max-length v) "]. "))))
+
+(defn nil-doc [stats parent-sample-count]
+  (let [times-without-the-field (- parent-sample-count (::st/sample-count stats 0))
+        times-the-field-is-nil (get-in stats [::st/pred-map nil? ::st/sample-count] 0)]
+    (str (format "Nil %.2f%%"
+                 (* 100.0
+                    (/ (+ times-without-the-field times-the-field-is-nil)
+                       parent-sample-count))))))
 
 (defn move-null-to-first [types]
   (if (and (sequential? types)
@@ -113,7 +128,8 @@
              (update :type move-null-to-first)
 
              (can-be-null? stats parent-sample-count)
-             (update :type add-null)
+             (-> (update :type add-null)
+                 (update :doc (fn [doc] (str doc (nil-doc stats parent-sample-count)))))
 
              (examples stats)
              (update :doc (fn [doc] (str (example-doc (examples stats)) ". " doc)))))))
