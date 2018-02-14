@@ -90,10 +90,12 @@
 (defn nil-doc [stats parent-sample-count]
   (let [times-without-the-field (- parent-sample-count (::st/sample-count stats 0))
         times-the-field-is-nil (get-in stats [::st/pred-map nil? ::st/sample-count] 0)]
-    (str (format "Nil %.2f%%"
-                 (* 100.0
-                    (/ (+ times-without-the-field times-the-field-is-nil)
-                       parent-sample-count))))))
+    (if (= (+ times-without-the-field times-the-field-is-nil) parent-sample-count)
+      "Always nil"
+      (str (format "Nil %.2f%%"
+                   (* 100.0
+                      (/ (+ times-without-the-field times-the-field-is-nil)
+                         parent-sample-count)))))))
 
 (defn move-null-to-first [types]
   (if (and (sequential? types)
